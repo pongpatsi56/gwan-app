@@ -1,51 +1,63 @@
 <!DOCTYPE html>
 <html lang="th">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>จัดก๊วนแบด - Gwan Badminton App</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <div class="container">
-    <h1>🏸 จัดก๊วนแบดมินตัน</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>จัดก๊วนแบด - Gwan Badminton App</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>🏸 จัดก๊วนแบดมินตัน</h1>
 
-    <!-- แบบฟอร์มเพิ่มผู้เล่น -->
-    <div class="section">
-      <h2>➕ เพิ่มผู้เล่น</h2>
-      <input type="text" id="playerName" placeholder="ชื่อผู้เล่น" />
-      <select id="playerGender">
-        <option value="male">ชาย</option>
-        <option value="female">หญิง</option>
-      </select>
-      <button onclick="addPlayer()">เพิ่ม</button>
+      <!-- แบบฟอร์มเพิ่มผู้เล่น -->
+      <div class="section">
+        <h2>➕ เพิ่มผู้เล่น</h2>
+        <input type="text" id="playerName" placeholder="ชื่อผู้เล่น" />
+        <select id="playerGender">
+          <option value="male">ชาย</option>
+          <option value="female">หญิง</option>
+        </select>
+        <button onclick="addPlayer()">เพิ่ม</button>
+      </div>
+
+      <!-- รายชื่อผู้เล่น -->
+      <div class="section">
+        <h2>
+          👥 รายชื่อผู้เล่น
+          <button onclick="shufflePlayers()">🔀 สุ่มผู้เล่น</button>
+        </h2>
+        <ul id="playerList"></ul>
+      </div>
+
+      <!-- คู่ที่กำลังเล่น -->
+      <div class="section">
+        <h2>🏆 เกมปัจจุบัน</h2>
+        <div id="currentMatch"></div>
+        <div id="winnerButtons" class="button-group"></div>
+      </div>
+
+      <!-- สรุปการเล่น -->
+      <div class="section">
+        <h2>📊 จำนวนเกมที่เล่น</h2>
+        <div id="gameSummary"></div>
+      </div>
+
+      <div class="section">
+        <h3>📜 ประวัติการแข่งขัน</h3>
+        <ul id="matchHistory"></ul>
+      </div>
+
+      <!-- ปุ่มล้างข้อมูล -->
+      <div class="section">
+        <button class="danger" onclick="resetAll()">
+          🔄 ล้างข้อมูลทั้งหมด
+        </button>
+        <!-- <button id="btnStartGame" onclick="startGame()">🎯 เริ่มเกม</button> -->
+      </div>
     </div>
 
-    <!-- รายชื่อผู้เล่น -->
-    <div class="section">
-      <h2>👥 รายชื่อผู้เล่น</h2>
-      <ul id="playerList"></ul>
-    </div>
-
-    <!-- คู่ที่กำลังเล่น -->
-    <div class="section">
-      <h2>🏆 เกมปัจจุบัน</h2>
-      <div id="currentMatch"></div>
-      <div id="winnerButtons" class="button-group"></div>
-    </div>
-
-    <!-- สรุปการเล่น -->
-    <div class="section">
-      <h2>📊 จำนวนเกมที่เล่น</h2>
-      <div id="gameSummary"></div>
-    </div>
-
-    <!-- ปุ่มล้างข้อมูล -->
-    <div class="section">
-      <button class="danger" onclick="resetAll()">🔄 ล้างข้อมูลทั้งหมด</button>
-    </div>
-  </div>
-
-  <script src="script.js"></script>
-</body>
+    <script src="script.js"></script>
+  </body>
 </html>
