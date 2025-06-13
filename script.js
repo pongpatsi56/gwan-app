@@ -24,6 +24,7 @@ function addPlayer() {
   document.getElementById("playerName").value = "";
   renderPlayerList();
   renderSummary();
+  toggleStartButton(); // เพิ่มบรรทัดนี้
 }
 
 // ========== แสดงรายชื่อผู้เล่น ==========
@@ -167,11 +168,22 @@ function chooseWinner(winnerIndex) {
     renderRandomMatch();
   } else {
     // แชมป์อยู่ต่อ → หาทีมใหม่มาเจอ
-    const remainingPlayers = players.filter(
-      (p) => !winnerTeam.some((w) => w.name === p.name)
+    let remainingPlayersSorted = players
+      .filter((p) => !winnerTeam.some((w) => w.name === p.name))
+      .sort((a, b) => a.played - b.played);
+
+    // หาค่าที่เล่นน้อยที่สุด
+    const minPlayed = Math.min(...remainingPlayersSorted.map((p) => p.played));
+
+    // filter เฉพาะคนที่ played เท่ากับค่าน้อยที่สุด
+    let leastPlayedPeople = remainingPlayersSorted.filter(
+      (p) => p.played === minPlayed
     );
-    shuffleArray(remainingPlayers);
-    const newOpponent = remainingPlayers.slice(0, 2);
+    if (leastPlayedPeople?.length > 2) {
+      shuffleArray(leastPlayedPeople);
+      remainingPlayersSorted = leastPlayedPeople;
+    }
+    const newOpponent = remainingPlayersSorted.slice(0, 2);
 
     currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
     showMatch();
@@ -311,4 +323,10 @@ function renderRandomMatch() {
   }
 
   showMatch();
+}
+
+function toggleStartButton() {
+  const btn = document.getElementById("btnStartGame");
+  if (!btn) return;
+  btn.style.display = players.length >= 4 ? "inline-block" : "none";
 }
