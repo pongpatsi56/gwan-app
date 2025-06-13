@@ -2,7 +2,8 @@
 let players = JSON.parse(localStorage.getItem("players")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
 let currentMatch = JSON.parse(localStorage.getItem("currentMatch")) || null;
-let currentChampion = JSON.parse(localStorage.getItem("currentChampion")) || null;
+let currentChampion =
+  JSON.parse(localStorage.getItem("currentChampion")) || null;
 let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
 
 // ========== เริ่มต้น ==========
@@ -42,6 +43,11 @@ function renderPlayerList() {
 
 // ========== จัดเกมใหม่ ==========
 function renderGame() {
+  if (currentMatch) {
+    showMatch(); // หากมีคู่ปัจจุบันอยู่แล้วให้แสดง
+    return;
+  }
+
   if (players.length < 4) {
     document.getElementById("currentMatch").innerHTML =
       "❗ ต้องมีผู้เล่นอย่างน้อย 4 คน";
@@ -73,6 +79,7 @@ function renderGame() {
     ];
   }
 
+  saveState(); // บันทึกสถานะใหม่
   showMatch();
 }
 
@@ -84,21 +91,14 @@ function selectBalancedPlayers() {
   const sorted = [...players].sort((a, b) => a.played - b.played);
 
   let selected = [];
-  let targetPlayedCount = sorted[0].played; // จำนวนเกมน้อยสุด
-
-  // เลือกคนที่เล่นเท่ากับน้อยสุดก่อน
-  selected = sorted.filter((p) => p.played === targetPlayedCount);
-
-  // ถ้าไม่ครบ 4 คน ให้เพิ่มคนเล่นเกมถัดไป
-  let index = selected.length;
-  while (selected.length < 4 && index < sorted.length) {
-    selected.push(sorted[index]);
-    index++;
-  }
-
-  // ตัดเหลือ 4 คนถ้าจำนวนมากกว่า 4
-  if (selected.length > 4) {
-    selected = selected.slice(0, 4);
+  // เลือกผู้เล่นที่ยังไม่เคยเล่น (played = 0) ก่อน
+  const zeroPlayed = sorted.filter((p) => p.played === 0);
+  selected =
+    zeroPlayed.length > 0 ? zeroPlayed.slice(0, 4) : sorted.slice(0, 4);
+  // ถ้าไม่ครบ 4 คน ให้เลือกคนที่เล่นน้อยที่สุด (น้อยกว่า 4 คน)
+  if (selected.length < 4) {
+    const remaining = sorted.filter((p) => p.played > 0);
+    selected = selected.concat(remaining.slice(0, 4 - selected.length));
   }
 
   return selected;
