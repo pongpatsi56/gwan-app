@@ -56,8 +56,23 @@
         </button>
         <button id="btnStartGame" onclick="renderGame()">🎯 เริ่มเกม</button>
       </div>
+      <div class="section" style="display:none;">
+        <h3>🔧 การตั้งค่าเริ่มต้น</h3>
+<pre><code>
+localStorage.setItem('players', JSON.stringify([
+  { "name": "เวย์", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "อาย", "gender": "female", "played": 0, "waitCount": 0 },
+  { "name": "น้องต้นหอม", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "พี่ไผ่", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "แชมป์", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "พี่ฟลุค", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "อายอาย", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "น้องใหม่", "gender": "male", "played": 0, "waitCount": 0 },
+  { "name": "นิกกี้", "gender": "male", "played": 0, "waitCount": 0 }
+]));
+</code></pre>
+      </div>
     </div>
-
     <script src="script.js"></script>
   </body>
 </html>

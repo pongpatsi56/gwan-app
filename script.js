@@ -6,6 +6,11 @@ let currentChampion =
   JSON.parse(localStorage.getItem("currentChampion")) || null;
 let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
 
+// ตรวจสอบให้แน่ใจว่า player แต่ละคนมี waitCount
+players.forEach((p) => {
+  if (p.waitCount === undefined) p.waitCount = 0;
+});
+
 // ========== เริ่มต้น ==========
 renderPlayerList();
 renderGame();
@@ -19,12 +24,12 @@ function addPlayer() {
 
   if (!name) return;
 
-  players.push({ name, gender, played: 0 });
+  players.push({ name, gender, played: 0, waitCount: 0 });
   saveState();
   document.getElementById("playerName").value = "";
   renderPlayerList();
   renderSummary();
-  toggleStartButton(); // เพิ่มบรรทัดนี้
+  toggleStartButton();
 }
 
 // ========== แสดงรายชื่อผู้เล่น ==========
@@ -45,7 +50,7 @@ function renderPlayerList() {
 // ========== จัดเกมใหม่ ==========
 function renderGame() {
   if (currentMatch) {
-    showMatch(); // หากมีคู่ปัจจุบันอยู่แล้วให้แสดง
+    showMatch();
     return;
   }
 
@@ -56,10 +61,14 @@ function renderGame() {
     return;
   }
 
-  // เลือก 4 คนที่เล่นน้อยสุดแบบสมดุล
   const selectedPlayers = selectBalancedPlayers();
+  if (selectedPlayers.length < 4) {
+    document.getElementById("currentMatch").innerHTML =
+      "❗ ไม่มีผู้เล่นเพียงพอ (บางคนยังรออยู่)";
+    document.getElementById("winnerButtons").innerHTML = "";
+    return;
+  }
 
-  // แยกชายหญิง
   const males = selectedPlayers.filter((p) => p.gender === "male");
   const females = selectedPlayers.filter((p) => p.gender === "female");
 
@@ -80,32 +89,29 @@ function renderGame() {
     ];
   }
 
-  saveState(); // บันทึกสถานะใหม่
+  saveState();
   showMatch();
 }
 
-// ฟังก์ชันเลือกผู้เล่น 4 คนที่เล่นน้อยสุดสมดุล
+// ========== เลือกผู้เล่นสมดุล และยังไม่รอ ==========
 function selectBalancedPlayers() {
-  if (players.length < 4) return [];
+  const available = players.filter((p) => p.waitCount === 0);
+  if (available.length < 4) return [];
 
-  // เรียงตามจำนวนเกมที่เล่นจากน้อยไปมาก
-  const sorted = [...players].sort((a, b) => a.played - b.played);
-
-  let selected = [];
-  // เลือกผู้เล่นที่ยังไม่เคยเล่น (played = 0) ก่อน
+  const sorted = [...available].sort((a, b) => a.played - b.played);
   const zeroPlayed = sorted.filter((p) => p.played === 0);
-  selected =
-    zeroPlayed.length > 0 ? zeroPlayed.slice(0, 4) : sorted.slice(0, 4);
-  // ถ้าไม่ครบ 4 คน ให้เลือกคนที่เล่นน้อยที่สุด (น้อยกว่า 4 คน)
+  let selected =
+    zeroPlayed.length >= 4 ? zeroPlayed.slice(0, 4) : sorted.slice(0, 4);
+
   if (selected.length < 4) {
-    const remaining = sorted.filter((p) => p.played > 0);
+    const remaining = sorted.filter((p) => !selected.includes(p));
     selected = selected.concat(remaining.slice(0, 4 - selected.length));
   }
 
   return selected;
 }
 
-// ========== แสดงคู่ที่กำลังเล่น ==========
+// ========== แสดงคู่ปัจจุบัน ==========
 function showMatch() {
   const div = document.getElementById("currentMatch");
   div.innerHTML = "";
@@ -127,6 +133,16 @@ function showMatch() {
   });
 }
 
+// ========== ฟังก์ชันเช็กคนที่เคยเล่นคู่กัน ==========
+function havePlayedTogether(p1, p2) {
+  return history.some((match) => {
+    const teams = [match.winner, match.loser];
+    return teams.some(
+      (team) => team.includes(p1.name) && team.includes(p2.name)
+    );
+  });
+}
+
 // ========== เมื่อเลือกผู้ชนะ ==========
 function chooseWinner(winnerIndex) {
   const winnerTeam = currentMatch[winnerIndex].team;
@@ -135,25 +151,33 @@ function chooseWinner(winnerIndex) {
   const winnerNames = winnerTeam.map((p) => p.name).join(" + ");
   const loserNames = loserTeam.map((p) => p.name).join(" + ");
 
-  const confirmWin = confirm(
-    `ยืนยันว่า "${winnerNames}" ชนะเหนือ "${loserNames}" ใช่หรือไม่?`
-  );
-  if (!confirmWin) return;
+  if (
+    !confirm(`ยืนยันว่า "${winnerNames}" ชนะเหนือ "${loserNames}" ใช่หรือไม่?`)
+  )
+    return;
 
-  // อัปเดตจำนวนเกม
   [...winnerTeam, ...loserTeam].forEach((player) => {
     const found = players.find((p) => p.name === player.name);
     if (found) found.played++;
   });
 
-  // เพิ่มประวัติ
+  // ผู้แพ้ต้องพัก 2 เกม
+  loserTeam.forEach((player) => {
+    const found = players.find((p) => p.name === player.name);
+    if (found) found.waitCount = 2;
+  });
+
+  // ลด waitCount ของคนอื่นลง
+  players.forEach((p) => {
+    if (p.waitCount > 0) p.waitCount--;
+  });
+
   history.push({
     winner: winnerTeam.map((p) => p.name),
     loser: loserTeam.map((p) => p.name),
   });
 
   const winnerKey = winnerTeam.map((p) => p.name).join("+");
-
   if (currentChampion === winnerKey) {
     championWinCount++;
   } else {
@@ -162,28 +186,32 @@ function chooseWinner(winnerIndex) {
   }
 
   if (championWinCount >= 2) {
-    // แชมป์ครบ 2 เกม ออกทั้งทีม
     currentChampion = null;
     championWinCount = 0;
     renderRandomMatch();
   } else {
-    // แชมป์อยู่ต่อ → หาทีมใหม่มาเจอ
     let remainingPlayersSorted = players
-      .filter((p) => !winnerTeam.some((w) => w.name === p.name))
+      .filter(
+        (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
+      )
       .sort((a, b) => a.played - b.played);
 
-    // หาค่าที่เล่นน้อยที่สุด
-    const minPlayed = Math.min(...remainingPlayersSorted.map((p) => p.played));
-
-    // filter เฉพาะคนที่ played เท่ากับค่าน้อยที่สุด
-    let leastPlayedPeople = remainingPlayersSorted.filter(
-      (p) => p.played === minPlayed
-    );
-    if (leastPlayedPeople?.length > 2) {
-      shuffleArray(leastPlayedPeople);
-      remainingPlayersSorted = leastPlayedPeople;
+    let newOpponent = null;
+    for (let i = 0; i < remainingPlayersSorted.length; i++) {
+      for (let j = i + 1; j < remainingPlayersSorted.length; j++) {
+        const p1 = remainingPlayersSorted[i];
+        const p2 = remainingPlayersSorted[j];
+        if (!havePlayedTogether(p1, p2)) {
+          newOpponent = [p1, p2];
+          break;
+        }
+      }
+      if (newOpponent) break;
     }
-    const newOpponent = remainingPlayersSorted.slice(0, 2);
+
+    if (!newOpponent) {
+      newOpponent = remainingPlayersSorted.slice(0, 2);
+    }
 
     currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
     showMatch();
@@ -194,18 +222,20 @@ function chooseWinner(winnerIndex) {
   renderHistory();
 }
 
-// ========== แสดงสรุปการเล่น ==========
+// ========== สรุป ==========
 function renderSummary() {
   const div = document.getElementById("gameSummary");
   div.innerHTML = "";
 
   const sorted = [...players].sort((a, b) => b.played - a.played);
   sorted.forEach((p) => {
-    div.innerHTML += `<div>${p.name}: ${p.played} เกม</div>`;
+    div.innerHTML += `<div>${p.name}: ${p.played} เกม ${
+      p.waitCount > 0 ? `(รอ ${p.waitCount})` : ""
+    }</div>`;
   });
 }
 
-// ========== แสดงประวัติการแข่งขัน ==========
+// ========== ประวัติ ==========
 function renderHistory() {
   const ul = document.getElementById("matchHistory");
   ul.innerHTML = "";
@@ -227,7 +257,7 @@ function renderHistory() {
   });
 }
 
-// ========== ล้างข้อมูลทั้งหมด ==========
+// ========== ล้างข้อมูล ==========
 function resetAll() {
   if (!confirm("ล้างข้อมูลทั้งหมดจริงหรือไม่?")) return;
   players = [];
@@ -236,11 +266,7 @@ function resetAll() {
   currentChampion = null;
   championWinCount = 0;
 
-  localStorage.removeItem("players");
-  localStorage.removeItem("history");
-  localStorage.removeItem("currentMatch");
-  localStorage.removeItem("currentChampion");
-  localStorage.removeItem("championWinCount");
+  localStorage.clear();
 
   renderPlayerList();
   renderGame();
@@ -248,7 +274,7 @@ function resetAll() {
   renderHistory();
 }
 
-// ========== บันทึกลง localStorage ==========
+// ========== Save ==========
 function saveState() {
   localStorage.setItem("players", JSON.stringify(players));
   localStorage.setItem("history", JSON.stringify(history));
@@ -258,12 +284,7 @@ function saveState() {
 }
 
 function removePlayer(index) {
-  const player = players[index];
-  const confirmDelete = confirm(
-    `คุณแน่ใจหรือไม่ว่าต้องการลบ "${player.name}"?`
-  );
-  if (!confirmDelete) return;
-
+  if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${players[index].name}"?`)) return;
   players.splice(index, 1);
   saveState();
   renderPlayerList();
@@ -277,8 +298,7 @@ function shufflePlayers() {
     return;
   }
 
-  const confirmShuffle = confirm("คุณต้องการสุ่มลำดับผู้เล่นใหม่ใช่หรือไม่?");
-  if (!confirmShuffle) return;
+  if (!confirm("คุณต้องการสุ่มลำดับผู้เล่นใหม่ใช่หรือไม่?")) return;
 
   for (let i = players.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -289,7 +309,6 @@ function shufflePlayers() {
   renderPlayerList();
 }
 
-// ========== ฟังก์ชันช่วยสุ่ม array ==========
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -297,11 +316,8 @@ function shuffleArray(arr) {
   }
 }
 
-// ========== จัดคู่แบบสุ่มสมดุล ==========
 function renderRandomMatch() {
   const selected = selectBalancedPlayers();
-
-  // แยกชายหญิง
   const males = selected.filter((p) => p.gender === "male");
   const females = selected.filter((p) => p.gender === "female");
 
