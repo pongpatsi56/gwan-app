@@ -6,7 +6,7 @@ let currentChampion =
   JSON.parse(localStorage.getItem("currentChampion")) || null;
 let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
 
-// ตรวจสอบให้แน่ใจว่า player แต่ละคนมี waitCount
+// ให้แน่ใจว่าแต่ละคนมี waitCount
 players.forEach((p) => {
   if (p.waitCount === undefined) p.waitCount = 0;
 });
@@ -21,7 +21,6 @@ renderHistory();
 function addPlayer() {
   const name = document.getElementById("playerName").value.trim();
   const gender = document.getElementById("playerGender").value;
-
   if (!name) return;
 
   players.push({ name, gender, played: 0, waitCount: 0 });
@@ -64,7 +63,7 @@ function renderGame() {
   const selectedPlayers = selectBalancedPlayers();
   if (selectedPlayers.length < 4) {
     document.getElementById("currentMatch").innerHTML =
-      "❗ ไม่มีผู้เล่นเพียงพอ (บางคนยังรออยู่)";
+      "❗ ไม่มีผู้เล่นเพียงพอ (บางคนพักอยู่)";
     document.getElementById("winnerButtons").innerHTML = "";
     return;
   }
@@ -93,25 +92,30 @@ function renderGame() {
   showMatch();
 }
 
-// ========== เลือกผู้เล่นสมดุล และยังไม่รอ ==========
+// ========== เลือกผู้เล่นสมดุล ==========
+// คนที่ waitCount = 0 และ played น้อยที่สุดก่อน
 function selectBalancedPlayers() {
-  const available = players.filter((p) => p.waitCount === 0);
-  if (available.length < 4) return [];
+  if (players.length < 4) return [];
 
-  const sorted = [...available].sort((a, b) => a.played - b.played);
-  const zeroPlayed = sorted.filter((p) => p.played === 0);
-  let selected =
-    zeroPlayed.length >= 4 ? zeroPlayed.slice(0, 4) : sorted.slice(0, 4);
+  const availablePlayers = players.filter((p) => p.waitCount === 0);
+  if (availablePlayers.length < 4) return [];
 
-  if (selected.length < 4) {
-    const remaining = sorted.filter((p) => !selected.includes(p));
-    selected = selected.concat(remaining.slice(0, 4 - selected.length));
+  const minPlayed = Math.min(...availablePlayers.map((p) => p.played));
+  const leastPlayed = availablePlayers.filter((p) => p.played === minPlayed);
+
+  if (leastPlayed.length >= 4) {
+    shuffleArray(leastPlayed);
+    return leastPlayed.slice(0, 4);
   }
 
-  return selected;
+  const remaining = availablePlayers
+    .filter((p) => p.played !== minPlayed)
+    .sort((a, b) => a.played - b.played);
+
+  return leastPlayed.concat(remaining.slice(0, 4 - leastPlayed.length));
 }
 
-// ========== แสดงคู่ปัจจุบัน ==========
+// ========== แสดงคู่ที่กำลังแข่ง ==========
 function showMatch() {
   const div = document.getElementById("currentMatch");
   div.innerHTML = "";
@@ -133,17 +137,7 @@ function showMatch() {
   });
 }
 
-// ========== ฟังก์ชันเช็กคนที่เคยเล่นคู่กัน ==========
-function havePlayedTogether(p1, p2) {
-  return history.some((match) => {
-    const teams = [match.winner, match.loser];
-    return teams.some(
-      (team) => team.includes(p1.name) && team.includes(p2.name)
-    );
-  });
-}
-
-// ========== เมื่อเลือกผู้ชนะ ==========
+// ========== เลือกผู้ชนะ ==========
 function chooseWinner(winnerIndex) {
   const winnerTeam = currentMatch[winnerIndex].team;
   const loserTeam = currentMatch[1 - winnerIndex].team;
@@ -151,27 +145,29 @@ function chooseWinner(winnerIndex) {
   const winnerNames = winnerTeam.map((p) => p.name).join(" + ");
   const loserNames = loserTeam.map((p) => p.name).join(" + ");
 
-  if (
-    !confirm(`ยืนยันว่า "${winnerNames}" ชนะเหนือ "${loserNames}" ใช่หรือไม่?`)
-  )
-    return;
+  const confirmWin = confirm(
+    `ยืนยันว่า "${winnerNames}" ชนะเหนือ "${loserNames}" ใช่หรือไม่?`
+  );
+  if (!confirmWin) return;
 
+  // เพิ่มจำนวนเกม
   [...winnerTeam, ...loserTeam].forEach((player) => {
     const found = players.find((p) => p.name === player.name);
     if (found) found.played++;
   });
 
-  // ผู้แพ้ต้องพัก 2 เกม
+  // ผู้แพ้พัก 1 เกม
   loserTeam.forEach((player) => {
     const found = players.find((p) => p.name === player.name);
-    if (found) found.waitCount = 2;
+    if (found) found.waitCount = 1;
   });
 
-  // ลด waitCount ของคนอื่นลง
+  // ลด waitCount คนอื่น
   players.forEach((p) => {
     if (p.waitCount > 0) p.waitCount--;
   });
 
+  // เพิ่มประวัติ
   history.push({
     winner: winnerTeam.map((p) => p.name),
     loser: loserTeam.map((p) => p.name),
@@ -190,28 +186,17 @@ function chooseWinner(winnerIndex) {
     championWinCount = 0;
     renderRandomMatch();
   } else {
-    let remainingPlayersSorted = players
-      .filter(
-        (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
-      )
-      .sort((a, b) => a.played - b.played);
+    const remainingPlayers = players.filter(
+      (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
+    );
 
-    let newOpponent = null;
-    for (let i = 0; i < remainingPlayersSorted.length; i++) {
-      for (let j = i + 1; j < remainingPlayersSorted.length; j++) {
-        const p1 = remainingPlayersSorted[i];
-        const p2 = remainingPlayersSorted[j];
-        if (!havePlayedTogether(p1, p2)) {
-          newOpponent = [p1, p2];
-          break;
-        }
-      }
-      if (newOpponent) break;
-    }
+    const minPlayed = Math.min(...remainingPlayers.map((p) => p.played));
+    const leastPlayed = remainingPlayers.filter((p) => p.played === minPlayed);
+    let nextOpponents =
+      leastPlayed.length >= 2 ? leastPlayed : remainingPlayers;
 
-    if (!newOpponent) {
-      newOpponent = remainingPlayersSorted.slice(0, 2);
-    }
+    shuffleArray(nextOpponents);
+    const newOpponent = nextOpponents.slice(0, 2);
 
     currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
     showMatch();
@@ -229,10 +214,14 @@ function renderSummary() {
 
   const sorted = [...players].sort((a, b) => b.played - a.played);
   sorted.forEach((p) => {
-    div.innerHTML += `<div>${p.name}: ${p.played} เกม ${
-      p.waitCount > 0 ? `(รอ ${p.waitCount})` : ""
-    }</div>`;
+    div.innerHTML += `<div>${p.name}: ${p.played} เกม</div>`;
   });
+
+  // ✅ เพิ่มบรรทัดนี้เพื่อแสดงค่า min played
+  if (players.length > 0) {
+    const minPlayed = Math.min(...players.map((p) => p.played));
+    div.innerHTML += `<hr><div><strong>🧮 เล่นน้อยสุด:</strong> ${minPlayed} เกม</div>`;
+  }
 }
 
 // ========== ประวัติ ==========
@@ -274,7 +263,7 @@ function resetAll() {
   renderHistory();
 }
 
-// ========== Save ==========
+// ========== บันทึก ==========
 function saveState() {
   localStorage.setItem("players", JSON.stringify(players));
   localStorage.setItem("history", JSON.stringify(history));
@@ -283,8 +272,14 @@ function saveState() {
   localStorage.setItem("championWinCount", championWinCount.toString());
 }
 
+// ========== ลบผู้เล่น ==========
 function removePlayer(index) {
-  if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบ "${players[index].name}"?`)) return;
+  const player = players[index];
+  const confirmDelete = confirm(
+    `คุณแน่ใจหรือไม่ว่าต้องการลบ "${player.name}"?`
+  );
+  if (!confirmDelete) return;
+
   players.splice(index, 1);
   saveState();
   renderPlayerList();
@@ -292,23 +287,22 @@ function removePlayer(index) {
   renderGame();
 }
 
+// ========== สุ่มตำแหน่ง ==========
 function shufflePlayers() {
   if (players.length < 2) {
     alert("ต้องมีผู้เล่นอย่างน้อย 2 คนเพื่อสับตำแหน่ง");
     return;
   }
 
-  if (!confirm("คุณต้องการสุ่มลำดับผู้เล่นใหม่ใช่หรือไม่?")) return;
+  const confirmShuffle = confirm("คุณต้องการสุ่มลำดับผู้เล่นใหม่ใช่หรือไม่?");
+  if (!confirmShuffle) return;
 
-  for (let i = players.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [players[i], players[j]] = [players[j], players[i]];
-  }
-
+  shuffleArray(players);
   saveState();
   renderPlayerList();
 }
 
+// ========== สุ่ม Array ==========
 function shuffleArray(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -316,6 +310,7 @@ function shuffleArray(arr) {
   }
 }
 
+// ========== สร้างคู่ใหม่แบบสุ่ม ==========
 function renderRandomMatch() {
   const selected = selectBalancedPlayers();
   const males = selected.filter((p) => p.gender === "male");
@@ -341,6 +336,7 @@ function renderRandomMatch() {
   showMatch();
 }
 
+// ========== ปุ่มเริ่ม ==========
 function toggleStartButton() {
   const btn = document.getElementById("btnStartGame");
   if (!btn) return;
