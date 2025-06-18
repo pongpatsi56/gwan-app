@@ -5,8 +5,8 @@ let currentMatch = JSON.parse(localStorage.getItem("currentMatch")) || null;
 let currentChampion =
   JSON.parse(localStorage.getItem("currentChampion")) || null;
 let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
+let lastLosers = JSON.parse(localStorage.getItem("lastLosers")) || [];
 
-// ให้แน่ใจว่าแต่ละคนมี waitCount
 players.forEach((p) => {
   if (p.waitCount === undefined) p.waitCount = 0;
 });
@@ -97,7 +97,9 @@ function renderGame() {
 function selectBalancedPlayers() {
   if (players.length < 4) return [];
 
-  const availablePlayers = players.filter((p) => p.waitCount === 0);
+  const availablePlayers = players.filter(
+    (p) => p.waitCount === 0 && !lastLosers.includes(p.name)
+  );
   if (availablePlayers.length < 4) return [];
 
   const minPlayed = Math.min(...availablePlayers.map((p) => p.played));
@@ -150,7 +152,6 @@ function chooseWinner(winnerIndex) {
   );
   if (!confirmWin) return;
 
-  // เพิ่มจำนวนเกม
   [...winnerTeam, ...loserTeam].forEach((player) => {
     const found = players.find((p) => p.name === player.name);
     if (found) found.played++;
@@ -167,7 +168,10 @@ function chooseWinner(winnerIndex) {
     if (p.waitCount > 0) p.waitCount--;
   });
 
-  // เพิ่มประวัติ
+  // เก็บผู้แพ้ล่าสุด
+  lastLosers = loserTeam.map((p) => p.name);
+  localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
+
   history.push({
     winner: winnerTeam.map((p) => p.name),
     loser: loserTeam.map((p) => p.name),
@@ -184,16 +188,24 @@ function chooseWinner(winnerIndex) {
   if (championWinCount >= 2) {
     currentChampion = null;
     championWinCount = 0;
+    // ❌ ไม่รีเซ็ต lastLosers
     renderRandomMatch();
   } else {
-    const remainingPlayers = players.filter(
-      (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
-    );
+    const remainingPlayers = players
+      .filter(
+        (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
+      )
+      .sort((a, b) => a.played - b.played);
 
     const minPlayed = Math.min(...remainingPlayers.map((p) => p.played));
     const leastPlayed = remainingPlayers.filter((p) => p.played === minPlayed);
+
     let nextOpponents =
-      leastPlayed.length >= 2 ? leastPlayed : remainingPlayers;
+      leastPlayed.length >= 2
+        ? leastPlayed
+        : leastPlayed.length == 1
+        ? [...leastPlayed, ...remainingPlayers]
+        : remainingPlayers;
 
     shuffleArray(nextOpponents);
     const newOpponent = nextOpponents.slice(0, 2);
@@ -217,7 +229,6 @@ function renderSummary() {
     div.innerHTML += `<div>${p.name}: ${p.played} เกม</div>`;
   });
 
-  // ✅ เพิ่มบรรทัดนี้เพื่อแสดงค่า min played
   if (players.length > 0) {
     const minPlayed = Math.min(...players.map((p) => p.played));
     div.innerHTML += `<hr><div><strong>🧮 เล่นน้อยสุด:</strong> ${minPlayed} เกม</div>`;
@@ -254,6 +265,7 @@ function resetAll() {
   currentMatch = null;
   currentChampion = null;
   championWinCount = 0;
+  lastLosers = [];
 
   localStorage.clear();
 
@@ -270,6 +282,7 @@ function saveState() {
   localStorage.setItem("currentMatch", JSON.stringify(currentMatch));
   localStorage.setItem("currentChampion", JSON.stringify(currentChampion));
   localStorage.setItem("championWinCount", championWinCount.toString());
+  localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
 }
 
 // ========== ลบผู้เล่น ==========
@@ -313,6 +326,14 @@ function shuffleArray(arr) {
 // ========== สร้างคู่ใหม่แบบสุ่ม ==========
 function renderRandomMatch() {
   const selected = selectBalancedPlayers();
+  if (selected.length < 4) {
+    currentMatch = null;
+    document.getElementById("currentMatch").innerHTML =
+      "❗ ไม่มีผู้เล่นเพียงพอสำหรับแมตช์ใหม่";
+    document.getElementById("winnerButtons").innerHTML = "";
+    return;
+  }
+
   const males = selected.filter((p) => p.gender === "male");
   const females = selected.filter((p) => p.gender === "female");
 
@@ -333,6 +354,7 @@ function renderRandomMatch() {
     ];
   }
 
+  saveState(); // เพิ่มให้แน่ใจว่า state ใหม่ถูกบันทึก
   showMatch();
 }
 
