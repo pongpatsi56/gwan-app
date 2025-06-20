@@ -9,6 +9,7 @@ let lastLosers = JSON.parse(localStorage.getItem("lastLosers")) || [];
 
 players.forEach((p) => {
   if (p.waitCount === undefined) p.waitCount = 0;
+  if (p.waited === undefined) p.waited = 0;
 });
 
 // ========== เริ่มต้น ==========
@@ -119,26 +120,33 @@ function selectBalancedPlayers() {
 
 // ========== แสดงคู่ที่กำลังแข่ง ==========
 function showMatch() {
-  const div = document.getElementById("currentMatch");
-  div.innerHTML = "";
+  const table = document.getElementById("currentMatch");
+  table.innerHTML = `
+    <tr>
+      <th class="col-number">ทีม</th>
+      <th>ผู้เล่น</th>
+      <th>เลือกผู้ชนะ</th>
+    </tr>
+  `;
 
   currentMatch.forEach((pair, index) => {
     const teamNames = pair.team.map((p) => p.name).join(" + ");
-    div.innerHTML += `<div><strong>ทีม ${
+    const row = `
+      <tr>
+        <td>ทีม ${index + 1}</td>
+        <td style="max-width: 300px; overflow-x: auto;">
+          <div style="overflow-x: auto;">${teamNames}</div>
+        </td>
+        <td>
+          <button onclick="chooseWinner(${index})">✅ ทีม ${
       index + 1
-    }:</strong> ${teamNames}</div>`;
-  });
-
-  const winnerButtons = document.getElementById("winnerButtons");
-  winnerButtons.innerHTML = "";
-  currentMatch.forEach((pair, index) => {
-    const btn = document.createElement("button");
-    btn.textContent = `ทีม ${index + 1} ชนะ`;
-    btn.onclick = () => chooseWinner(index);
-    winnerButtons.appendChild(btn);
+    } ชนะ</button>
+        </td>
+      </tr>
+    `;
+    table.innerHTML += row;
   });
 }
-
 // ========== เลือกผู้ชนะ ==========
 function chooseWinner(winnerIndex) {
   const winnerTeam = currentMatch[winnerIndex].team;
@@ -152,31 +160,50 @@ function chooseWinner(winnerIndex) {
   );
   if (!confirmWin) return;
 
+  // เพิ่มจำนวนเกมที่เล่นให้ทุกคนในแมตช์
   [...winnerTeam, ...loserTeam].forEach((player) => {
     const found = players.find((p) => p.name === player.name);
-    if (found) found.played++;
+    if (found) {
+      found.played++;
+      found.waited = 0; // 🔄 ได้เล่นแล้ว รีเซ็ต waited
+    }
   });
 
-  // ผู้แพ้พัก 1 เกม
+  // ผู้แพ้ต้องพัก 2 เกม
   loserTeam.forEach((player) => {
     const found = players.find((p) => p.name === player.name);
-    if (found) found.waitCount = 1;
+    if (found) found.waitCount = 2;
   });
 
-  // ลด waitCount คนอื่น
+  // ลด waitCount ให้ทุกคนที่ยังรอ
   players.forEach((p) => {
     if (p.waitCount > 0) p.waitCount--;
   });
 
-  // เก็บผู้แพ้ล่าสุด
+  // ✅ เพิ่มตรงนี้: เพิ่ม waited ให้กับคนที่ไม่ได้ลงเล่นและไม่ได้ติด waitCount
+  players.forEach((p) => {
+    const isInGame =
+      winnerTeam.some((w) => w.name === p.name) ||
+      loserTeam.some((l) => l.name === p.name);
+
+    if (!isInGame) {
+      if (p.waitCount === 0) {
+        p.waited = (p.waited || 0) + 1;
+      }
+    }
+  });
+
+  // เก็บชื่อผู้แพ้ล่าสุด
   lastLosers = loserTeam.map((p) => p.name);
   localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
 
+  // บันทึกประวัติการแข่งขัน
   history.push({
     winner: winnerTeam.map((p) => p.name),
     loser: loserTeam.map((p) => p.name),
   });
 
+  // จัดการแชมป์
   const winnerKey = winnerTeam.map((p) => p.name).join("+");
   if (currentChampion === winnerKey) {
     championWinCount++;
@@ -185,12 +212,13 @@ function chooseWinner(winnerIndex) {
     championWinCount = 1;
   }
 
+  // ถ้าแชมป์ชนะ 2 ครั้งติดต่อกัน → สร้างแมตช์ใหม่แบบสุ่ม
   if (championWinCount >= 2) {
     currentChampion = null;
     championWinCount = 0;
-    // ❌ ไม่รีเซ็ต lastLosers
     renderRandomMatch();
   } else {
+    // แมตช์ต่อไป: แชมป์ vs คนที่ยังไม่เล่น
     const remainingPlayers = players
       .filter(
         (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
@@ -203,7 +231,7 @@ function chooseWinner(winnerIndex) {
     let nextOpponents =
       leastPlayed.length >= 2
         ? leastPlayed
-        : leastPlayed.length == 1
+        : leastPlayed.length === 1
         ? [...leastPlayed, ...remainingPlayers]
         : remainingPlayers;
 
@@ -221,39 +249,54 @@ function chooseWinner(winnerIndex) {
 
 // ========== สรุป ==========
 function renderSummary() {
-  const div = document.getElementById("gameSummary");
-  div.innerHTML = "";
+  const table = document.getElementById("gameSummary");
+  table.innerHTML = `
+    <tr>
+      <th>ชื่อ</th>
+      <th class="col-number">เล่นแล้ว</th>
+      <th class="col-number">พักอยู่</th>
+      <th class="col-number">นั่งรอแล้ว</th>
+    </tr>
+  `;
 
   const sorted = [...players].sort((a, b) => b.played - a.played);
   sorted.forEach((p) => {
-    div.innerHTML += `<div>${p.name}: ${p.played} เกม</div>`;
+    table.innerHTML += `
+      <tr>
+        <td title="${p.name}">${p.name}</td>
+        <td class="col-number">${p.played}</td>
+        <td class="col-number">${p.waitCount || 0}</td>
+        <td class="col-number">${p.waited || 0}</td>
+      </tr>
+    `;
   });
-
-  if (players.length > 0) {
-    const minPlayed = Math.min(...players.map((p) => p.played));
-    div.innerHTML += `<hr><div><strong>🧮 เล่นน้อยสุด:</strong> ${minPlayed} เกม</div>`;
-  }
 }
-
 // ========== ประวัติ ==========
 function renderHistory() {
-  const ul = document.getElementById("matchHistory");
-  ul.innerHTML = "";
+  const table = document.getElementById("matchHistory");
+  table.innerHTML = `
+    <tr>
+      <th class="col-number">เกมที่</th>
+      <th>ทีมชนะ 🏆</th>
+      <th>ทีมแพ้ ❌</th>
+    </tr>
+  `;
 
   if (history.length === 0) {
-    ul.innerHTML = "<li>ยังไม่มีประวัติการแข่งขัน</li>";
+    table.innerHTML += `
+      <tr><td colspan="3">ยังไม่มีประวัติการแข่งขัน</td></tr>
+    `;
     return;
   }
 
   history.forEach((match, index) => {
-    const li = document.createElement("li");
-    li.innerHTML = `
-      <strong>เกมที่ ${index + 1}</strong>: 
-      🏆 <span style="color:green">${match.winner.join(" + ")}</span> 
-      ชนะ 
-      ❌ <span style="color:red">${match.loser.join(" + ")}</span>
+    table.innerHTML += `
+      <tr>
+        <td class="col-number">${index + 1}</td>
+        <td title="${match.winner.join(" + ")}">${match.winner.join(" + ")}</td>
+        <td title="${match.loser.join(" + ")}">${match.loser.join(" + ")}</td>
+      </tr>
     `;
-    ul.appendChild(li);
   });
 }
 

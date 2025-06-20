@@ -82,3 +82,53 @@ ul li {
   margin-right: 10px;
   margin-top: 5px;
 }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th, .table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table th {
+  background-color: #f0f0f0;
+}
+
+.scroll-table {
+  display: block;
+  overflow-x: auto;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.scroll-table table {
+  width: 100%;
+}
+
+.table th,
+.table td {
+  min-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 8px;
+  text-align: center;
+}
+
+.table td button {
+  padding: 6px 12px;
+}
+
+.table .col-number {
+  width: 50px;
+  min-width: 50px;
+  text-align: center;
+}

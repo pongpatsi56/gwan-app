@@ -34,19 +34,20 @@
       <!-- คู่ที่กำลังเล่น -->
       <div class="section">
         <h2>🏆 เกมปัจจุบัน</h2>
-        <div id="currentMatch"></div>
+        <table id="currentMatch" class="table scroll-table"></table>
         <div id="winnerButtons" class="button-group"></div>
       </div>
 
       <!-- สรุปการเล่น -->
       <div class="section">
         <h2>📊 จำนวนเกมที่เล่น</h2>
-        <div id="gameSummary"></div>
+        <table id="gameSummary" class="table scroll-table"></table>
       </div>
 
+      <!-- ประวัติการแข่งขัน -->
       <div class="section">
         <h3>📜 ประวัติการแข่งขัน</h3>
-        <ul id="matchHistory"></ul>
+        <table id="matchHistory" class="table scroll-table"></table>
       </div>
 
       <!-- ปุ่มล้างข้อมูล -->
@@ -56,7 +57,7 @@
         </button>
         <button id="btnStartGame" onclick="renderGame()">🎯 เริ่มเกม</button>
       </div>
-      <div class="section">
+      <!-- <div class="section">
         <h3>🔧 การตั้งค่าเริ่มต้น</h3>
         <pre><code>
 localStorage.setItem('players', JSON.stringify([
@@ -71,7 +72,7 @@ localStorage.setItem('players', JSON.stringify([
   { "name": "นิกกี้", "gender": "male", "played": 0, "waitCount": 0 }
 ]));
 </code></pre>
-      </div>
+      </div> -->
     </div>
     <script src="script.js"></script>
   </body>
