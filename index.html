@@ -15,11 +15,13 @@
       <div class="section">
         <h2>➕ เพิ่มผู้เล่น</h2>
         <input type="text" id="playerName" placeholder="ชื่อผู้เล่น" />
-        <select id="playerGender">
-          <option value="male">ชาย</option>
-          <option value="female">หญิง</option>
-        </select>
-        <button onclick="addPlayer()">เพิ่ม</button>
+
+        <input type="radio" id="male" name="playerGender" value="male" checked="checked">
+        <label for="male">ชาย</label>
+        <input type="radio" id="female" name="playerGender" value="female">
+        <label for="female">หญิง</label>
+        
+        <button  style="margin-left: 10px; background-color: green;" onclick="addPlayer()"> ✚ เพิ่ม</button>
       </div>
 
       <!-- รายชื่อผู้เล่น -->
