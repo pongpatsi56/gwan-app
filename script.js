@@ -21,7 +21,8 @@ renderHistory();
 // ========== เพิ่มผู้เล่น ==========
 function addPlayer() {
   const name = document.getElementById("playerName").value.trim();
-  const gender = document.getElementById("playerGender").value;
+  let gender= document.querySelector('input[name="playerGender"]:checked').value;
+ 
   if (!name) return;
 
   players.push({ name, gender, played: 0, waitCount: 0 });
