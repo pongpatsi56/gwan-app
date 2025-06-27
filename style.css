@@ -132,3 +132,25 @@ ul li {
   min-width: 50px;
   text-align: center;
 }
+
+.fixed-players-table {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.fixed-player-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background-color: #f9f9f9;
+  cursor: pointer;
+}
+
+.fixed-player-item input[type="checkbox"] {
+  transform: scale(1.2);
+}

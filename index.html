@@ -11,17 +11,42 @@
     <div class="container">
       <h1>🏸 จัดก๊วนแบดมินตัน</h1>
 
+      <!-- ผู้เล่นประจำ -->
+      <div class="section">
+        <h2>✅ เช็คชื่อผู้เล่นประจำ</h2>
+        <div id="fixedPlayersList"></div>
+        <button onclick="confirmFixedPlayers()">✔️ ยืนยันผู้เล่นที่มา</button>
+        <button
+          id="btnToggleSelectAll"
+          onclick="toggleSelectAllFixedPlayers()"
+          style="background-color: #d4f7d4; color: #065f0a"
+        >
+          ☑️ เลือกทั้งหมด
+        </button>
+      </div>
+
       <!-- แบบฟอร์มเพิ่มผู้เล่น -->
       <div class="section">
         <h2>➕ เพิ่มผู้เล่น</h2>
         <input type="text" id="playerName" placeholder="ชื่อผู้เล่น" />
 
-        <input type="radio" id="male" name="playerGender" value="male" checked="checked">
+        <input
+          type="radio"
+          id="male"
+          name="playerGender"
+          value="male"
+          checked="checked"
+        />
         <label for="male">ชาย</label>
-        <input type="radio" id="female" name="playerGender" value="female">
+        <input type="radio" id="female" name="playerGender" value="female" />
         <label for="female">หญิง</label>
-        
-        <button  style="margin-left: 10px; background-color: green;" onclick="addPlayer()"> ✚ เพิ่ม</button>
+
+        <button
+          style="margin-left: 10px; background-color: green"
+          onclick="addPlayer()"
+        >
+          ✚ เพิ่ม
+        </button>
       </div>
 
       <!-- รายชื่อผู้เล่น -->

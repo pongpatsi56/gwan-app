@@ -12,17 +12,35 @@ players.forEach((p) => {
   if (p.waited === undefined) p.waited = 0;
 });
 
+let allFixedPlayersSelected = true; // ✅ เริ่มต้นคือ "เลือกทั้งหมด"
+const fixedPlayerList = [
+  { name: "ฟลุค", gender: "male" },
+  { name: "ไผ่", gender: "male" },
+  { name: "นิกกี้", gender: "male" },
+  { name: "อาย", gender: "female" },
+  { name: "ที", gender: "male" },
+  { name: "ใหม่", gender: "male" },
+  { name: "ต้นหอม", gender: "male" },
+  { name: "เวย์", gender: "male" },
+  { name: "อายอาย", gender: "female" },
+  { name: "แชมป์", gender: "male" },
+];
+
 // ========== เริ่มต้น ==========
 renderPlayerList();
 renderGame();
 renderSummary();
 renderHistory();
+renderFixedPlayersList();
+updateInputStateAfterGameStarted();
 
 // ========== เพิ่มผู้เล่น ==========
 function addPlayer() {
   const name = document.getElementById("playerName").value.trim();
-  let gender= document.querySelector('input[name="playerGender"]:checked').value;
- 
+  let gender = document.querySelector(
+    'input[name="playerGender"]:checked'
+  ).value;
+
   if (!name) return;
 
   players.push({ name, gender, played: 0, waitCount: 0 });
@@ -224,7 +242,7 @@ function chooseWinner(winnerIndex) {
       .filter(
         (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
       )
-      .sort((a, b) => a.played - b.played);
+      .sort((a, b) => a.played - b.played || b.waited - a.waited);
 
     const minPlayed = Math.min(...remainingPlayers.map((p) => p.played));
     const leastPlayed = remainingPlayers.filter((p) => p.played === minPlayed);
@@ -236,7 +254,7 @@ function chooseWinner(winnerIndex) {
         ? [...leastPlayed, ...remainingPlayers]
         : remainingPlayers;
 
-    shuffleArray(nextOpponents);
+    // shuffleArray(nextOpponents);
     const newOpponent = nextOpponents.slice(0, 2);
 
     currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
@@ -244,8 +262,103 @@ function chooseWinner(winnerIndex) {
   }
 
   saveState();
+  updateInputStateAfterGameStarted();
   renderSummary();
   renderHistory();
+}
+
+function confirmFixedPlayers() {
+  const confirmed = confirm("ยืนยันผู้เล่นที่มาตามที่เลือกใช่หรือไม่?");
+  if (!confirmed) return;
+
+  players = []; // ล้างก่อนเพิ่มใหม่
+
+  fixedPlayerList.forEach((player, index) => {
+    const checkbox = document.getElementById(`fixedPlayer-${index}`);
+    if (checkbox.checked) {
+      players.push({
+        name: player.name,
+        gender: player.gender,
+        played: 0,
+        waitCount: 0,
+        waited: 0,
+      });
+    }
+  });
+
+  saveState();
+  renderPlayerList();
+  renderSummary();
+  renderGame();
+  toggleStartButton();
+}
+
+function toggleSelectAllFixedPlayers() {
+  fixedPlayerList.forEach((_, index) => {
+    const checkbox = document.getElementById(`fixedPlayer-${index}`);
+    if (checkbox) checkbox.checked = allFixedPlayersSelected;
+  });
+
+  const btn = document.getElementById("btnToggleSelectAll");
+
+  if (allFixedPlayersSelected) {
+    btn.textContent = "🚫 ยกเลิกทั้งหมด";
+    btn.style.backgroundColor = "#f8d6d6"; // แดงอ่อน
+    btn.style.color = "#a10000";
+  } else {
+    btn.textContent = "☑️ เลือกทั้งหมด";
+    btn.style.backgroundColor = "#d4f7d4"; // เขียวอ่อน
+    btn.style.color = "#065f0a";
+  }
+
+  allFixedPlayersSelected = !allFixedPlayersSelected;
+}
+
+function updateInputStateAfterGameStarted() {
+  const hasStarted = currentMatch !== null || history.length > 0;
+
+  // ปุ่ม / ช่องกรอก
+  const addBtn = document.querySelector('button[onclick="addPlayer()"]');
+  const confirmBtn = document.querySelector(
+    'button[onclick="confirmFixedPlayers()"]'
+  );
+  const playerInput = document.getElementById("playerName");
+  const startBtn = document.getElementById("btnStartGame");
+  const shuffleBtn = document.querySelector(
+    'button[onclick="shufflePlayers()"]'
+  );
+  const toggleSelectAllBtn = document.getElementById("btnToggleSelectAll");
+
+  if (addBtn) addBtn.disabled = hasStarted;
+  if (confirmBtn) confirmBtn.disabled = hasStarted;
+  if (playerInput) playerInput.disabled = hasStarted;
+  if (startBtn) startBtn.disabled = hasStarted;
+  if (shuffleBtn) shuffleBtn.disabled = hasStarted;
+  if (toggleSelectAllBtn) toggleSelectAllBtn.disabled = hasStarted;
+
+  // ปรับสีจาง
+  [
+    addBtn,
+    confirmBtn,
+    playerInput,
+    startBtn,
+    shuffleBtn,
+    toggleSelectAllBtn,
+  ].forEach((el) => {
+    if (el) el.style.opacity = hasStarted ? "0.5" : "1";
+  });
+
+  // Disable checkbox ผู้เล่นประจำ
+  fixedPlayerList.forEach((_, index) => {
+    const checkbox = document.getElementById(`fixedPlayer-${index}`);
+    if (checkbox) checkbox.disabled = hasStarted;
+  });
+
+  // ปุ่มลบผู้เล่น
+  document.querySelectorAll(".delete-btn").forEach((btn) => {
+    btn.disabled = hasStarted;
+    btn.style.opacity = hasStarted ? "0.5" : "1";
+  });
 }
 
 // ========== สรุป ==========
@@ -255,8 +368,8 @@ function renderSummary() {
     <tr>
       <th>ชื่อ</th>
       <th class="col-number">เล่นแล้ว</th>
-      <th class="col-number">พักอยู่</th>
       <th class="col-number">นั่งรอแล้ว</th>
+      <th class="col-number">พึ่งออก</th>
     </tr>
   `;
 
@@ -266,8 +379,8 @@ function renderSummary() {
       <tr>
         <td title="${p.name}">${p.name}</td>
         <td class="col-number">${p.played}</td>
-        <td class="col-number">${p.waitCount || 0}</td>
         <td class="col-number">${p.waited || 0}</td>
+        <td class="col-number">${p.waitCount > 0 ? "✅" : ""}</td>
       </tr>
     `;
   });
@@ -301,6 +414,34 @@ function renderHistory() {
   });
 }
 
+function renderFixedPlayersList() {
+  const container = document.getElementById("fixedPlayersList");
+  container.innerHTML = "";
+
+  const grid = document.createElement("div");
+  grid.className = "fixed-players-table";
+
+  fixedPlayerList.forEach((player, index) => {
+    const wrapper = document.createElement("label");
+    wrapper.className = "fixed-player-item";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = `fixedPlayer-${index}`;
+    checkbox.dataset.name = player.name;
+    checkbox.dataset.gender = player.gender;
+    checkbox.checked = true;
+
+    const span = document.createElement("span");
+    span.innerText = player.name;
+
+    wrapper.appendChild(checkbox);
+    wrapper.appendChild(span);
+    grid.appendChild(wrapper);
+  });
+
+  container.appendChild(grid);
+}
 // ========== ล้างข้อมูล ==========
 function resetAll() {
   if (!confirm("ล้างข้อมูลทั้งหมดจริงหรือไม่?")) return;
@@ -317,6 +458,7 @@ function resetAll() {
   renderGame();
   renderSummary();
   renderHistory();
+  updateInputStateAfterGameStarted(); // 👈 เพิ่มตรงนี้
 }
 
 // ========== บันทึก ==========
