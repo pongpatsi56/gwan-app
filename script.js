@@ -132,7 +132,7 @@ function selectBalancedPlayers() {
 
   const remaining = availablePlayers
     .filter((p) => p.played !== minPlayed)
-    .sort((a, b) => a.played - b.played);
+    .sort((a, b) => a.played - b.played || b.waited - a.waited);
 
   return leastPlayed.concat(remaining.slice(0, 4 - leastPlayed.length));
 }
@@ -251,10 +251,16 @@ function chooseWinner(winnerIndex) {
       leastPlayed.length >= 2
         ? leastPlayed
         : leastPlayed.length === 1
-        ? [...leastPlayed, ...remainingPlayers]
+        ? removeDuplicateByKey([...leastPlayed, ...remainingPlayers], "name")
         : remainingPlayers;
 
-    // shuffleArray(nextOpponents);
+    const maxWaited = Math.max(...nextOpponents.map((p) => p.waited));
+    const mostWaited = nextOpponents.filter((p) => p.waited === maxWaited);
+
+    if (mostWaited > 2) {
+      shuffleArray(nextOpponents);
+    }
+
     const newOpponent = nextOpponents.slice(0, 2);
 
     currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
@@ -507,6 +513,16 @@ function shuffleArray(arr) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+function removeDuplicateByKey(arr, key) {
+  const seen = new Set();
+  return arr.filter((item) => {
+    const val = item[key];
+    if (seen.has(val)) return false;
+    seen.add(val);
+    return true;
+  });
 }
 
 // ========== สร้างคู่ใหม่แบบสุ่ม ==========
