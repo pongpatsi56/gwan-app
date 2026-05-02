@@ -6,6 +6,7 @@ let currentChampion =
   JSON.parse(localStorage.getItem("currentChampion")) || null;
 let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
 let lastLosers = JSON.parse(localStorage.getItem("lastLosers")) || [];
+let pairHistory = JSON.parse(localStorage.getItem("pairHistory")) || {};
 
 players.forEach((p) => {
   if (p.waitCount === undefined) p.waitCount = 0;
@@ -88,26 +89,7 @@ function renderGame() {
     return;
   }
 
-  const males = selectedPlayers.filter((p) => p.gender === "male");
-  const females = selectedPlayers.filter((p) => p.gender === "female");
-
-  if (females.length >= 2) {
-    currentMatch = [
-      { team: [males[0], females[0]] },
-      { team: [males[1], females[1]] },
-    ];
-  } else if (females.length === 1 && males.length >= 3) {
-    currentMatch = [
-      { team: [males[0], females[0]] },
-      { team: [males[1], males[2]] },
-    ];
-  } else {
-    currentMatch = [
-      { team: [selectedPlayers[0], selectedPlayers[1]] },
-      { team: [selectedPlayers[2], selectedPlayers[3]] },
-    ];
-  }
-
+  currentMatch = buildTeams(selectedPlayers);
   saveState();
   showMatch();
 }
@@ -222,6 +204,14 @@ function chooseWinner(winnerIndex) {
     loser: loserTeam.map((p) => p.name),
   });
 
+  // อัพเดตประวัติคู่
+  [winnerTeam, loserTeam].forEach((team) => {
+    if (team.length >= 2) {
+      const key = getPairKey(team[0], team[1]);
+      pairHistory[key] = (pairHistory[key] || 0) + 1;
+    }
+  });
+
   // จัดการแชมป์
   const winnerKey = winnerTeam.map((p) => p.name).join("+");
   if (currentChampion === winnerKey) {
@@ -231,8 +221,12 @@ function chooseWinner(winnerIndex) {
     championWinCount = 1;
   }
 
-  // ถ้าแชมป์ชนะ 2 ครั้งติดต่อกัน → สร้างแมตช์ใหม่แบบสุ่ม
+  // ถ้าแชมป์ชนะครบ 2 เกม → ออกทั้งสองฝั่ง
   if (championWinCount >= 2) {
+    winnerTeam.forEach((player) => {
+      const found = players.find((p) => p.name === player.name);
+      if (found) found.waitCount = 1;
+    });
     currentChampion = null;
     championWinCount = 0;
     renderRandomMatch();
@@ -244,27 +238,33 @@ function chooseWinner(winnerIndex) {
       )
       .sort((a, b) => a.played - b.played || b.waited - a.waited);
 
-    const minPlayed = Math.min(...remainingPlayers.map((p) => p.played));
-    const leastPlayed = remainingPlayers.filter((p) => p.played === minPlayed);
+    if (remainingPlayers.length < 2) {
+      currentChampion = null;
+      championWinCount = 0;
+      renderRandomMatch();
+    } else {
+      const minPlayed = Math.min(...remainingPlayers.map((p) => p.played));
+      const leastPlayed = remainingPlayers.filter((p) => p.played === minPlayed);
 
-    let nextOpponents =
-      leastPlayed.length >= 2
-        ? leastPlayed
-        : leastPlayed.length === 1
-        ? removeDuplicateByKey([...leastPlayed, ...remainingPlayers], "name")
-        : remainingPlayers;
+      let nextOpponents =
+        leastPlayed.length >= 2
+          ? leastPlayed
+          : leastPlayed.length === 1
+          ? removeDuplicateByKey([...leastPlayed, ...remainingPlayers], "name")
+          : remainingPlayers;
 
-    const maxWaited = Math.max(...nextOpponents.map((p) => p.waited));
-    const mostWaited = nextOpponents.filter((p) => p.waited === maxWaited);
+      const maxWaited = Math.max(...nextOpponents.map((p) => p.waited));
+      const mostWaited = nextOpponents.filter((p) => p.waited === maxWaited);
 
-    if (mostWaited > 2) {
-      shuffleArray(nextOpponents);
+      if (mostWaited.length > 2) {
+        shuffleArray(nextOpponents);
+      }
+
+      const newOpponent = selectBestPair(nextOpponents);
+
+      currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
+      showMatch();
     }
-
-    const newOpponent = nextOpponents.slice(0, 2);
-
-    currentMatch = [{ team: winnerTeam }, { team: newOpponent }];
-    showMatch();
   }
 
   saveState();
@@ -457,6 +457,7 @@ function resetAll() {
   currentChampion = null;
   championWinCount = 0;
   lastLosers = [];
+  pairHistory = {};
 
   localStorage.clear();
 
@@ -475,6 +476,7 @@ function saveState() {
   localStorage.setItem("currentChampion", JSON.stringify(currentChampion));
   localStorage.setItem("championWinCount", championWinCount.toString());
   localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
+  localStorage.setItem("pairHistory", JSON.stringify(pairHistory));
 }
 
 // ========== ลบผู้เล่น ==========
@@ -536,28 +538,76 @@ function renderRandomMatch() {
     return;
   }
 
+  currentMatch = buildTeams(selected);
+  saveState();
+  showMatch();
+}
+
+// ========== key คู่ผู้เล่น ==========
+function getPairKey(p1, p2) {
+  return [p1.name, p2.name].sort().join("|");
+}
+
+// ========== จัดทีมตามเพศ + หลีกเลี่ยงคู่ซ้ำ ==========
+function buildTeams(selected) {
   const males = selected.filter((p) => p.gender === "male");
   const females = selected.filter((p) => p.gender === "female");
 
-  if (females.length >= 2) {
-    currentMatch = [
-      { team: [males[0], females[0]] },
-      { team: [males[1], females[1]] },
+  let configs;
+  if (females.length >= 2 && males.length >= 2) {
+    configs = [
+      [[males[0], females[0]], [males[1], females[1]]],
+      [[males[0], females[1]], [males[1], females[0]]],
     ];
   } else if (females.length === 1 && males.length >= 3) {
-    currentMatch = [
-      { team: [males[0], females[0]] },
-      { team: [males[1], males[2]] },
+    configs = [
+      [[males[0], females[0]], [males[1], males[2]]],
+      [[males[1], females[0]], [males[0], males[2]]],
+      [[males[2], females[0]], [males[0], males[1]]],
     ];
   } else {
-    currentMatch = [
-      { team: [selected[0], selected[1]] },
-      { team: [selected[2], selected[3]] },
+    configs = [
+      [[selected[0], selected[1]], [selected[2], selected[3]]],
+      [[selected[0], selected[2]], [selected[1], selected[3]]],
+      [[selected[0], selected[3]], [selected[1], selected[2]]],
     ];
   }
 
-  saveState(); // เพิ่มให้แน่ใจว่า state ใหม่ถูกบันทึก
-  showMatch();
+  configs.sort((a, b) => {
+    const score = (cfg) =>
+      (pairHistory[getPairKey(cfg[0][0], cfg[0][1])] || 0) +
+      (pairHistory[getPairKey(cfg[1][0], cfg[1][1])] || 0);
+    return score(a) - score(b);
+  });
+
+  return [{ team: configs[0][0] }, { team: configs[0][1] }];
+}
+
+// ========== เลือกคู่ที่ดีที่สุด (played น้อย → waited มาก → คู่ซ้ำน้อย) ==========
+function selectBestPair(candidates) {
+  if (candidates.length <= 2) return candidates.slice(0, 2);
+  let bestPair = [candidates[0], candidates[1]];
+  let bestPlayed = bestPair[0].played + bestPair[1].played;
+  let bestWaited = bestPair[0].waited + bestPair[1].waited;
+  let bestPairScore = pairHistory[getPairKey(bestPair[0], bestPair[1])] || 0;
+  for (let i = 0; i < candidates.length; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+      const totalPlayed = candidates[i].played + candidates[j].played;
+      const totalWaited = candidates[i].waited + candidates[j].waited;
+      const pairScore = pairHistory[getPairKey(candidates[i], candidates[j])] || 0;
+      if (
+        totalPlayed < bestPlayed ||
+        (totalPlayed === bestPlayed && totalWaited > bestWaited) ||
+        (totalPlayed === bestPlayed && totalWaited === bestWaited && pairScore < bestPairScore)
+      ) {
+        bestPair = [candidates[i], candidates[j]];
+        bestPlayed = totalPlayed;
+        bestWaited = totalWaited;
+        bestPairScore = pairScore;
+      }
+    }
+  }
+  return bestPair;
 }
 
 // ========== ปุ่มเริ่ม ==========
