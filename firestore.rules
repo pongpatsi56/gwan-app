@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /sessions/{sessionId} {
+      // ทุกคนอ่านได้
+      allow read: if true;
+
+      // สร้างได้เฉพาะคน login แล้ว และต้องใส่ uid ของตัวเองเป็น creatorUid
+      allow create: if request.auth != null
+                    && request.resource.data.creatorUid == request.auth.uid;
+
+      // แก้ไข/ลบได้เฉพาะ creator เท่านั้น
+      allow update, delete: if request.auth != null
+                            && resource.data.creatorUid == request.auth.uid;
+    }
+  }
+}

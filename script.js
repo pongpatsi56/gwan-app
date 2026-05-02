@@ -1,19 +1,14 @@
 // ========== ตัวแปร ==========
-let players = JSON.parse(localStorage.getItem("players")) || [];
-let history = JSON.parse(localStorage.getItem("history")) || [];
-let currentMatch = JSON.parse(localStorage.getItem("currentMatch")) || null;
-let currentChampion =
-  JSON.parse(localStorage.getItem("currentChampion")) || null;
-let championWinCount = parseInt(localStorage.getItem("championWinCount")) || 0;
-let lastLosers = JSON.parse(localStorage.getItem("lastLosers")) || [];
-let pairHistory = JSON.parse(localStorage.getItem("pairHistory")) || {};
+let players = [];
+let history = [];
+let currentMatch = null;
+let currentChampion = null;
+let championWinCount = 0;
+let lastLosers = [];
+let pairHistory = {};
+let creatorUid = null;
 
-players.forEach((p) => {
-  if (p.waitCount === undefined) p.waitCount = 0;
-  if (p.waited === undefined) p.waited = 0;
-});
-
-let allFixedPlayersSelected = true; // ✅ เริ่มต้นคือ "เลือกทั้งหมด"
+let allFixedPlayersSelected = true;
 const fixedPlayerList = [
   { name: "ฟลุค", gender: "male" },
   { name: "ไผ่", gender: "male" },
@@ -27,16 +22,123 @@ const fixedPlayerList = [
   { name: "แชมป์", gender: "male" },
 ];
 
-// ========== เริ่มต้น ==========
-renderPlayerList();
-renderGame();
-renderSummary();
-renderHistory();
-renderFixedPlayersList();
-updateInputStateAfterGameStarted();
+// ========== Firebase ==========
+const db = firebase.firestore();
+const auth = firebase.auth();
+const SESSION_DOC = db.collection("sessions").doc("main");
+
+function isCreator() {
+  const user = auth.currentUser;
+  return user !== null && user.uid === creatorUid;
+}
+
+// canEdit: true ถ้าเป็น creator หรือยังไม่มี creator (first-come)
+function canEdit() {
+  const user = auth.currentUser;
+  return user !== null && (creatorUid === null || user.uid === creatorUid);
+}
+
+async function loginWithGoogle() {
+  try {
+    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  } catch (e) {
+    alert("Login ไม่สำเร็จ: " + e.message);
+  }
+}
+
+async function logout() {
+  await auth.signOut();
+}
+
+function updateAuthUI(user) {
+  const status = document.getElementById("authStatus");
+  const loginBtn = document.getElementById("btnLogin");
+  const logoutBtn = document.getElementById("btnLogout");
+  if (!status) return;
+
+  if (user && user.uid === creatorUid) {
+    status.textContent = `🔑 Creator: ${user.displayName}`;
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+  } else if (user && creatorUid === null) {
+    status.textContent = `✅ ${user.displayName} — กดยืนยันผู้เล่นเพื่อเป็น Creator`;
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+  } else if (user) {
+    status.textContent = `👁 ${user.displayName} — ดูอย่างเดียว`;
+    loginBtn.style.display = "none";
+    logoutBtn.style.display = "inline-block";
+  } else {
+    status.textContent = "👁 ดูอย่างเดียว — เข้าสู่ระบบเพื่อเป็น Creator";
+    loginBtn.style.display = "inline-block";
+    logoutBtn.style.display = "none";
+  }
+
+  updateInputStateAfterGameStarted();
+}
+
+function applyState(data) {
+  creatorUid = data.creatorUid || null;
+  players = data.players || [];
+  history = data.history || [];
+  currentMatch = data.currentMatch || null;
+  currentChampion = data.currentChampion || null;
+  championWinCount = data.championWinCount || 0;
+  lastLosers = data.lastLosers || [];
+  pairHistory = data.pairHistory || {};
+
+  players.forEach((p) => {
+    if (p.waitCount === undefined) p.waitCount = 0;
+    if (p.waited === undefined) p.waited = 0;
+  });
+
+  renderPlayerList();
+  renderGame();
+  renderSummary();
+  renderHistory();
+  renderFixedPlayersList();
+  updateInputStateAfterGameStarted();
+}
+
+// Subscribe: real-time listener
+SESSION_DOC.onSnapshot((doc) => {
+  if (doc.exists) {
+    applyState(doc.data());
+  } else {
+    renderPlayerList();
+    renderGame();
+    renderSummary();
+    renderHistory();
+    renderFixedPlayersList();
+    updateInputStateAfterGameStarted();
+  }
+});
+
+// Auth state listener
+auth.onAuthStateChanged((user) => {
+  updateAuthUI(user);
+});
+
+// ========== บันทึก ==========
+function saveState() {
+  const uid = auth.currentUser?.uid || null;
+  const effectiveCreatorUid = creatorUid || uid;
+
+  SESSION_DOC.set({
+    creatorUid: effectiveCreatorUid,
+    players,
+    history,
+    currentMatch,
+    currentChampion,
+    championWinCount,
+    lastLosers,
+    pairHistory,
+  }).catch((err) => console.error("บันทึกไม่สำเร็จ:", err));
+}
 
 // ========== เพิ่มผู้เล่น ==========
 function addPlayer() {
+  if (!canEdit()) return;
   const name = document.getElementById("playerName").value.trim();
   let gender = document.querySelector(
     'input[name="playerGender"]:checked'
@@ -44,7 +146,7 @@ function addPlayer() {
 
   if (!name) return;
 
-  players.push({ name, gender, played: 0, waitCount: 0 });
+  players.push({ name, gender, played: 0, waitCount: 0, waited: 0 });
   saveState();
   document.getElementById("playerName").value = "";
   renderPlayerList();
@@ -69,6 +171,8 @@ function renderPlayerList() {
 
 // ========== จัดเกมใหม่ ==========
 function renderGame() {
+  if (!canEdit() && !currentMatch) return;
+
   if (currentMatch) {
     showMatch();
     return;
@@ -95,7 +199,6 @@ function renderGame() {
 }
 
 // ========== เลือกผู้เล่นสมดุล ==========
-// คนที่ waitCount = 0 และ played น้อยที่สุดก่อน
 function selectBalancedPlayers() {
   if (players.length < 4) return [];
 
@@ -132,6 +235,7 @@ function showMatch() {
 
   currentMatch.forEach((pair, index) => {
     const teamNames = pair.team.map((p) => p.name).join(" + ");
+    const winBtnDisabled = !isCreator() ? "disabled style='opacity:0.4'" : "";
     const row = `
       <tr>
         <td>ทีม ${index + 1}</td>
@@ -139,17 +243,18 @@ function showMatch() {
           <div style="overflow-x: auto;">${teamNames}</div>
         </td>
         <td>
-          <button onclick="chooseWinner(${index})">✅ ทีม ${
-      index + 1
-    } ชนะ</button>
+          <button onclick="chooseWinner(${index})" ${winBtnDisabled}>✅ ทีม ${index + 1} ชนะ</button>
         </td>
       </tr>
     `;
     table.innerHTML += row;
   });
 }
+
 // ========== เลือกผู้ชนะ ==========
 function chooseWinner(winnerIndex) {
+  if (!isCreator()) return;
+
   const winnerTeam = currentMatch[winnerIndex].team;
   const loserTeam = currentMatch[1 - winnerIndex].team;
 
@@ -161,50 +266,39 @@ function chooseWinner(winnerIndex) {
   );
   if (!confirmWin) return;
 
-  // เพิ่มจำนวนเกมที่เล่นให้ทุกคนในแมตช์
   [...winnerTeam, ...loserTeam].forEach((player) => {
     const found = players.find((p) => p.name === player.name);
     if (found) {
       found.played++;
-      found.waited = 0; // 🔄 ได้เล่นแล้ว รีเซ็ต waited
+      found.waited = 0;
     }
   });
 
-  // ผู้แพ้ต้องพัก 2 เกม
   loserTeam.forEach((player) => {
     const found = players.find((p) => p.name === player.name);
     if (found) found.waitCount = 2;
   });
 
-  // ลด waitCount ให้ทุกคนที่ยังรอ
   players.forEach((p) => {
     if (p.waitCount > 0) p.waitCount--;
   });
 
-  // ✅ เพิ่มตรงนี้: เพิ่ม waited ให้กับคนที่ไม่ได้ลงเล่นและไม่ได้ติด waitCount
   players.forEach((p) => {
     const isInGame =
       winnerTeam.some((w) => w.name === p.name) ||
       loserTeam.some((l) => l.name === p.name);
-
-    if (!isInGame) {
-      if (p.waitCount === 0) {
-        p.waited = (p.waited || 0) + 1;
-      }
+    if (!isInGame && p.waitCount === 0) {
+      p.waited = (p.waited || 0) + 1;
     }
   });
 
-  // เก็บชื่อผู้แพ้ล่าสุด
   lastLosers = loserTeam.map((p) => p.name);
-  localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
 
-  // บันทึกประวัติการแข่งขัน
   history.push({
     winner: winnerTeam.map((p) => p.name),
     loser: loserTeam.map((p) => p.name),
   });
 
-  // อัพเดตประวัติคู่
   [winnerTeam, loserTeam].forEach((team) => {
     if (team.length >= 2) {
       const key = getPairKey(team[0], team[1]);
@@ -212,7 +306,6 @@ function chooseWinner(winnerIndex) {
     }
   });
 
-  // จัดการแชมป์
   const winnerKey = winnerTeam.map((p) => p.name).join("+");
   if (currentChampion === winnerKey) {
     championWinCount++;
@@ -221,7 +314,6 @@ function chooseWinner(winnerIndex) {
     championWinCount = 1;
   }
 
-  // ถ้าแชมป์ชนะครบ 2 เกม → ออกทั้งสองฝั่ง
   if (championWinCount >= 2) {
     winnerTeam.forEach((player) => {
       const found = players.find((p) => p.name === player.name);
@@ -231,7 +323,6 @@ function chooseWinner(winnerIndex) {
     championWinCount = 0;
     renderRandomMatch();
   } else {
-    // แมตช์ต่อไป: แชมป์ vs คนที่ยังไม่เล่น
     const remainingPlayers = players
       .filter(
         (p) => !winnerTeam.some((w) => w.name === p.name) && p.waitCount === 0
@@ -274,10 +365,11 @@ function chooseWinner(winnerIndex) {
 }
 
 function confirmFixedPlayers() {
+  if (!canEdit()) return;
   const confirmed = confirm("ยืนยันผู้เล่นที่มาตามที่เลือกใช่หรือไม่?");
   if (!confirmed) return;
 
-  players = []; // ล้างก่อนเพิ่มใหม่
+  players = [];
 
   fixedPlayerList.forEach((player, index) => {
     const checkbox = document.getElementById(`fixedPlayer-${index}`);
@@ -309,11 +401,11 @@ function toggleSelectAllFixedPlayers() {
 
   if (allFixedPlayersSelected) {
     btn.textContent = "🚫 ยกเลิกทั้งหมด";
-    btn.style.backgroundColor = "#f8d6d6"; // แดงอ่อน
+    btn.style.backgroundColor = "#f8d6d6";
     btn.style.color = "#a10000";
   } else {
     btn.textContent = "☑️ เลือกทั้งหมด";
-    btn.style.backgroundColor = "#d4f7d4"; // เขียวอ่อน
+    btn.style.backgroundColor = "#d4f7d4";
     btn.style.color = "#065f0a";
   }
 
@@ -322,48 +414,41 @@ function toggleSelectAllFixedPlayers() {
 
 function updateInputStateAfterGameStarted() {
   const hasStarted = currentMatch !== null || history.length > 0;
+  const creator = isCreator();
+  const editable = canEdit();
 
   // ปุ่ม / ช่องกรอก
   const addBtn = document.querySelector('button[onclick="addPlayer()"]');
-  const confirmBtn = document.querySelector(
-    'button[onclick="confirmFixedPlayers()"]'
-  );
+  const confirmBtn = document.querySelector('button[onclick="confirmFixedPlayers()"]');
   const playerInput = document.getElementById("playerName");
   const startBtn = document.getElementById("btnStartGame");
-  const shuffleBtn = document.querySelector(
-    'button[onclick="shufflePlayers()"]'
-  );
+  const shuffleBtn = document.querySelector('button[onclick="shufflePlayers()"]');
   const toggleSelectAllBtn = document.getElementById("btnToggleSelectAll");
+  const resetBtn = document.querySelector('button[onclick="resetAll()"]');
 
-  if (addBtn) addBtn.disabled = hasStarted;
-  if (confirmBtn) confirmBtn.disabled = hasStarted;
-  if (playerInput) playerInput.disabled = hasStarted;
-  if (startBtn) startBtn.disabled = hasStarted;
-  if (shuffleBtn) shuffleBtn.disabled = hasStarted;
-  if (toggleSelectAllBtn) toggleSelectAllBtn.disabled = hasStarted;
+  const setupDisabled = !editable || hasStarted;
 
-  // ปรับสีจาง
-  [
-    addBtn,
-    confirmBtn,
-    playerInput,
-    startBtn,
-    shuffleBtn,
-    toggleSelectAllBtn,
-  ].forEach((el) => {
-    if (el) el.style.opacity = hasStarted ? "0.5" : "1";
+  if (addBtn) addBtn.disabled = setupDisabled;
+  if (confirmBtn) confirmBtn.disabled = setupDisabled;
+  if (playerInput) playerInput.disabled = setupDisabled;
+  if (startBtn) startBtn.disabled = !creator || hasStarted;
+  if (shuffleBtn) shuffleBtn.disabled = setupDisabled;
+  if (toggleSelectAllBtn) toggleSelectAllBtn.disabled = setupDisabled;
+  if (resetBtn) resetBtn.disabled = !creator;
+
+  [addBtn, confirmBtn, playerInput, startBtn, shuffleBtn, toggleSelectAllBtn].forEach((el) => {
+    if (el) el.style.opacity = setupDisabled ? "0.5" : "1";
   });
+  if (resetBtn) resetBtn.style.opacity = !creator ? "0.5" : "1";
 
-  // Disable checkbox ผู้เล่นประจำ
   fixedPlayerList.forEach((_, index) => {
     const checkbox = document.getElementById(`fixedPlayer-${index}`);
-    if (checkbox) checkbox.disabled = hasStarted;
+    if (checkbox) checkbox.disabled = setupDisabled;
   });
 
-  // ปุ่มลบผู้เล่น
   document.querySelectorAll(".delete-btn").forEach((btn) => {
-    btn.disabled = hasStarted;
-    btn.style.opacity = hasStarted ? "0.5" : "1";
+    btn.disabled = setupDisabled;
+    btn.style.opacity = setupDisabled ? "0.5" : "1";
   });
 }
 
@@ -391,6 +476,7 @@ function renderSummary() {
     `;
   });
 }
+
 // ========== ประวัติ ==========
 function renderHistory() {
   const table = document.getElementById("matchHistory");
@@ -403,9 +489,7 @@ function renderHistory() {
   `;
 
   if (history.length === 0) {
-    table.innerHTML += `
-      <tr><td colspan="3">ยังไม่มีประวัติการแข่งขัน</td></tr>
-    `;
+    table.innerHTML += `<tr><td colspan="3">ยังไม่มีประวัติการแข่งขัน</td></tr>`;
     return;
   }
 
@@ -448,9 +532,12 @@ function renderFixedPlayersList() {
 
   container.appendChild(grid);
 }
+
 // ========== ล้างข้อมูล ==========
 function resetAll() {
+  if (!isCreator()) return;
   if (!confirm("ล้างข้อมูลทั้งหมดจริงหรือไม่?")) return;
+
   players = [];
   history = [];
   currentMatch = null;
@@ -459,28 +546,17 @@ function resetAll() {
   lastLosers = [];
   pairHistory = {};
 
-  localStorage.clear();
-
+  saveState();
   renderPlayerList();
   renderGame();
   renderSummary();
   renderHistory();
-  updateInputStateAfterGameStarted(); // 👈 เพิ่มตรงนี้
-}
-
-// ========== บันทึก ==========
-function saveState() {
-  localStorage.setItem("players", JSON.stringify(players));
-  localStorage.setItem("history", JSON.stringify(history));
-  localStorage.setItem("currentMatch", JSON.stringify(currentMatch));
-  localStorage.setItem("currentChampion", JSON.stringify(currentChampion));
-  localStorage.setItem("championWinCount", championWinCount.toString());
-  localStorage.setItem("lastLosers", JSON.stringify(lastLosers));
-  localStorage.setItem("pairHistory", JSON.stringify(pairHistory));
+  updateInputStateAfterGameStarted();
 }
 
 // ========== ลบผู้เล่น ==========
 function removePlayer(index) {
+  if (!canEdit()) return;
   const player = players[index];
   const confirmDelete = confirm(
     `คุณแน่ใจหรือไม่ว่าต้องการลบ "${player.name}"?`
@@ -496,6 +572,7 @@ function removePlayer(index) {
 
 // ========== สุ่มตำแหน่ง ==========
 function shufflePlayers() {
+  if (!canEdit()) return;
   if (players.length < 2) {
     alert("ต้องมีผู้เล่นอย่างน้อย 2 คนเพื่อสับตำแหน่ง");
     return;

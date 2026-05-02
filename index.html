@@ -44,8 +44,34 @@
     <!-- Favicon และ CSS -->
     <link rel="icon" href="favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="style.css" />
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script src="firebase-config.js"></script>
   </head>
   <body>
+    <!-- Auth Bar -->
+    <div id="authBar" style="
+      position: sticky; top: 0; z-index: 100;
+      background: #1a1a2e; color: #eee;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 16px; font-size: 14px; gap: 8px;
+    ">
+      <span id="authStatus">⏳ กำลังเชื่อมต่อ...</span>
+      <div style="display:flex; gap:6px;">
+        <button id="btnLogin" onclick="loginWithGoogle()" style="
+          background:#4285f4; color:#fff; border:none;
+          padding:5px 12px; border-radius:4px; cursor:pointer; font-size:13px;
+        ">🔑 เข้าสู่ระบบ (Creator)</button>
+        <button id="btnLogout" onclick="logout()" style="
+          display:none; background:#555; color:#fff; border:none;
+          padding:5px 12px; border-radius:4px; cursor:pointer; font-size:13px;
+        ">ออกจากระบบ</button>
+      </div>
+    </div>
+
     <div class="container">
       <h1>🏸 จัดก๊วนแบดมินตัน</h1>
 
